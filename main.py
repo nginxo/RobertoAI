@@ -27,7 +27,7 @@ SETTINGS_FILE = "roberto_settings.json"
 
 # Default settings
 settings = {
-    "aggressive_mode": True,
+    "aggressive_mode": False,
     "pc_control": False,
     "screen_sharing": False
 }
@@ -128,6 +128,8 @@ DIRECTORY PRINCIPALI (usa %username% per l'utente corrente):
 - Video: C:\Users\%username%\Videos
 - Musica: C:\Users\%username%\Music
 
+NON puoi eliminare, o terminare processi di TUA spontanea volontà finchè non te lo chiede l'utente
+
 PRIMA DI ESEGUIRE QUALSIASI FILE, NON PRENDERE TUTTO PER SCONTATO, TIPO QUANDO CHIEDE METTI MUSICA E DICE UN NOME, POTREBBE ESSERE DIVERSO, QUINDI FAI QUESTO!
 RICERCA FILE:
 Se l'utente chiede di aprire un file:
@@ -218,7 +220,7 @@ def get_system_prompt():
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or API_KEY)
 recognizer = sr.Recognizer()
-recognizer.energy_threshold = 100
+recognizer.energy_threshold = 200
 recognizer.dynamic_energy_threshold = True
 recognizer.dynamic_energy_adjustment_damping = 0.1
 recognizer.dynamic_energy_ratio = 1.2
@@ -301,14 +303,14 @@ text_area.tag_config("screen", foreground="#fa5252", font=("Consolas", 11, "bold
 
 # ================= SETTINGS TAB =================
 settings_tab = tk.Frame(notebook, bg="#0a0e27")
-notebook.add(settings_tab, text="  Settings  ")
+notebook.add(settings_tab, text="  Impostazioni  ")
 
 settings_frame = tk.Frame(settings_tab, bg="#0a0e27")
 settings_frame.pack(expand=True, fill="both", padx=40, pady=40)
 
 settings_title = tk.Label(
     settings_frame,
-    text="⚙️ Settings",
+    text="⚙️ Impostazioni",
     font=("Segoe UI", 24, "bold"),
     bg="#0a0e27",
     fg="#00ffff"
@@ -324,7 +326,7 @@ aggressive_inner.pack(padx=20, pady=20)
 
 aggressive_label = tk.Label(
     aggressive_inner,
-    text="🔥 Aggressive Mode",
+    text="🔥 Modalità Aggressiva",
     font=("Segoe UI", 16, "bold"),
     bg="#131829",
     fg="#ff6b6b"
@@ -333,7 +335,7 @@ aggressive_label.pack(anchor="w")
 
 aggressive_desc = tk.Label(
     aggressive_inner,
-    text="Enable sarcastic and confrontational personality with Italian insults",
+    text="Attiva la modalità scontrosa di Roberto. Non adatto per le persone sensibili.",
     font=("Segoe UI", 10),
     bg="#131829",
     fg="#888",
@@ -345,7 +347,7 @@ aggressive_desc.pack(anchor="w", pady=(5, 10))
 aggressive_var = tk.BooleanVar(value=settings["aggressive_mode"])
 aggressive_check = tk.Checkbutton(
     aggressive_inner,
-    text="Enable Aggressive Mode",
+    text="Attiva la modalità Aggressiva",
     variable=aggressive_var,
     font=("Segoe UI", 12),
     bg="#131829",
@@ -366,7 +368,7 @@ pc_control_inner.pack(padx=20, pady=20)
 
 pc_control_label = tk.Label(
     pc_control_inner,
-    text="💻 PC Control",
+    text="💻 Controllo PC",
     font=("Segoe UI", 16, "bold"),
     bg="#131829",
     fg="#ffd43b"
@@ -375,7 +377,7 @@ pc_control_label.pack(anchor="w")
 
 pc_control_desc = tk.Label(
     pc_control_inner,
-    text="Allow Roberto to execute system commands (open apps, files, etc.)",
+    text="Autorizza Roberto a eseguire comandi nel tuo computer (aprire app, files, ecc.)",
     font=("Segoe UI", 10),
     bg="#131829",
     fg="#888",
@@ -386,7 +388,7 @@ pc_control_desc.pack(anchor="w", pady=(5, 5))
 
 warning_label = tk.Label(
     pc_control_inner,
-    text="⚠️ WARNING: Enabling this feature allows AI to run commands on your PC.\nUse at your own risk. No liability for any system changes or damages.",
+    text="⚠️ AVVERTENZA: Abilitando questa funzione autorizzi Roberto ad eseguire comandi sul tuo PC (aprire applicazioni, eseguire programmi, eseguire comandi di sistema).\nUsa questa funzione a tuo rischio e pericolo. Nessuna responsabilità per danni o modifiche al sistema.",
     font=("Segoe UI", 9, "bold"),
     bg="#131829",
     fg="#fa5252",
@@ -398,7 +400,7 @@ warning_label.pack(anchor="w", pady=(0, 10))
 pc_control_var = tk.BooleanVar(value=settings["pc_control"])
 pc_control_check = tk.Checkbutton(
     pc_control_inner,
-    text="Enable PC Control (I understand the risks)",
+    text="Attiva Controllo PC (Comprendo i rischi)",
     variable=pc_control_var,
     font=("Segoe UI", 12),
     bg="#131829",
@@ -419,7 +421,7 @@ screen_share_inner.pack(padx=20, pady=20)
 
 screen_share_label = tk.Label(
     screen_share_inner,
-    text="👁️ Screen Sharing",
+    text="👁️ Condivisione Schermo",
     font=("Segoe UI", 16, "bold"),
     bg="#131829",
     fg="#51cf66"
@@ -428,7 +430,7 @@ screen_share_label.pack(anchor="w")
 
 screen_share_desc = tk.Label(
     screen_share_inner,
-    text="Allow Roberto to see your screen and provide visual assistance",
+    text="Consenti a Roberto di vedere il tuo schermo e fornire assistenza visiva quando necessario.",
     font=("Segoe UI", 10),
     bg="#131829",
     fg="#888",
@@ -439,7 +441,7 @@ screen_share_desc.pack(anchor="w", pady=(5, 5))
 
 screen_warning_label = tk.Label(
     screen_share_inner,
-    text="⚠️ Roberto will be able to see everything on your screen when sharing is active.\nYou can end sharing at any time using the overlay button.",
+    text="⚠️ Roberto sarà in grado di vedere tutto sul tuo schermo quando la condivisione è attiva.\nPuoi terminare la condivisione in qualsiasi momento utilizzando il pulsante nell'overlay.",
     font=("Segoe UI", 9, "bold"),
     bg="#131829",
     fg="#fa5252",
@@ -451,7 +453,7 @@ screen_warning_label.pack(anchor="w", pady=(0, 10))
 screen_share_var = tk.BooleanVar(value=settings["screen_sharing"])
 screen_share_check = tk.Checkbutton(
     screen_share_inner,
-    text="Enable Screen Sharing",
+    text="Attiva la condivisione dello schermo",
     variable=screen_share_var,
     font=("Segoe UI", 12),
     bg="#131829",
@@ -477,25 +479,25 @@ def confirm_pc_control(var):
     if var.get():
         result = messagebox.askyesno(
             "Enable PC Control",
-            "⚠️ WARNING\n\n"
-            "This will allow Roberto AI to execute system commands on your PC.\n\n"
-            "This includes:\n"
-            "• Opening applications\n"
-            "• Running system commands\n"
-            "• Executing programs\n\n"
-            "YOU USE THIS FEATURE AT YOUR OWN RISK.\n"
-            "No liability for any damages or changes to your system.\n\n"
-            "Do you accept these risks and want to continue?",
+            "⚠️ AVVERTENZA\n\n"
+            "Questo consentirà a Roberto di eseguire comandi nel tuo PC\n\n"
+            "Questo include:\n"
+            "• Aprire applicazioni\n"
+            "• Eseguire comandi di sistema\n"
+            "• Eseguire programmi\n\n"
+            "USI QUESTA FUNZIONE A TUO RISCHIO.\n"
+            "Nessuna responsabilità per danni o modifiche al sistema.\n\n"
+            "Accetti questi rischi e vuoi continuare?",
             icon='warning'
         )
         if result:
             update_setting("pc_control", True)
-            settings_status.config(text="✓ PC Control enabled", fg="#51cf66")
+            settings_status.config(text="✓ Controllo PC abilitato", fg="#51cf66")
         else:
             var.set(False)
     else:
         update_setting("pc_control", False)
-        settings_status.config(text="✓ PC Control disabled", fg="#888")
+        settings_status.config(text="✓ Controllo PC disabilitato", fg="#888")
 
 def update_setting(key, value):
     settings[key] = value
@@ -543,7 +545,7 @@ def create_screen_overlay():
     
     label = tk.Label(
         frame,
-        text="🔴 SCREEN SHARING ACTIVE",
+        text="🔴 CONDIVISIONE SCHERMO ATTIVA",
         font=("Segoe UI", 11, "bold"),
         bg="#fa5252",
         fg="white"
@@ -552,7 +554,7 @@ def create_screen_overlay():
     
     end_btn = tk.Button(
         frame,
-        text="END SHARING",
+        text="TERMINA",
         font=("Segoe UI", 10, "bold"),
         bg="white",
         fg="#fa5252",
@@ -579,7 +581,7 @@ def end_screen_sharing():
 def request_screen_sharing():
     """Ask user for permission to share screen"""
     result = messagebox.askyesno(
-        "Screen Sharing Request",
+        "Richiesta Condivisione Schermo",
         "👁️ Roberto vuole vedere il tuo schermo per aiutarti meglio.\n\n"
         "Roberto potrà vedere:\n"
         "• Tutto ciò che è visibile sul tuo schermo\n"
@@ -595,10 +597,10 @@ def request_screen_sharing():
         global screen_sharing_active
         screen_sharing_active = True
         create_screen_overlay()
-        log("👁️ Screen sharing attivata", "screen")
+        log("👁️ Condivisione schermo attivata", "screen")
         return True
     else:
-        log("👁️ Screen sharing rifiutata dall'utente", "info")
+        log("👁️ Condivisione schermo rifiutata dall'utente", "info")
         return False
 
 # ================= FUNCTIONS =================
@@ -677,7 +679,7 @@ def execute_command(command):
         return None
     
     try:
-        log(f"💻 Executing: {command}", "command")
+        log(f"💻 Eseguendo comando: {command}", "command")
         
         if platform.system() == "Windows":
             if command.strip().lower().startswith('dir '):
@@ -691,33 +693,33 @@ def execute_command(command):
                 )
                 output = result.stdout.strip()
                 if output:
-                    log(f"📂 Found files:\n{output[:500]}", "info")
+                    log(f"📂 Trovati file:\n{output[:500]}", "info")
                     return output
                 else:
-                    log("📂 No files found or directory empty", "info")
+                    log("📂 Nessun file trovato o directory vuota", "info")
                     return ""
             else:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                log("✓ Command executed", "info")
+                log("✓ Comando eseguito", "info")
                 return None
         else:
             subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            log("✓ Command executed", "info")
+            log("✓ Comando eseguito", "info")
             return None
             
     except Exception as e:
-        log(f"❌ Command failed: {e}", "info")
+        log(f"❌ Esecuzione del comando fallita: {e}", "info")
         return None
 
 def listen(state="", timeout=5, show_partial=False):
-    update_status(f"LISTENING - {state}", "#ffd43b")
+    update_status(f"ASCOLTANDO - {state}", "#ffd43b")
     with mic_lock:
         with sr.Microphone(device_index=MIC_INDEX) as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.3)
             
             try:
                 if show_partial:
-                    log("🎤 Listening (real-time)...", "info")
+                    log("🎤 Ascoltando (in tempo reale)...", "info")
                 
                 audio = recognizer.listen(
                     source, 
@@ -742,12 +744,12 @@ def listen(state="", timeout=5, show_partial=False):
         except sr.UnknownValueError:
             if show_partial:
                 text_area.delete("end-2l", "end-1l")
-            log(f"❌ Non ho capito un cazzo", "info")
+            log(f"❌ Non comprendo cosa stai dicendo", "info")
             return ""
         except sr.RequestError as e:
             if show_partial:
                 text_area.delete("end-2l", "end-1l")
-            log(f"❌ Recognition error: {e}", "info")
+            log(f"❌ Errore di riconoscimento: {e}", "info")
             return ""
 
 def ask_gemini(prompt, dir_output=None, screenshot_b64=None):
@@ -845,7 +847,7 @@ def assistant_loop():
     pc_status = "enabled" if settings["pc_control"] else "disabled"
     screen_status = "enabled" if settings["screen_sharing"] else "disabled"
     log(f"Mode: {mode} | PC Control: {pc_status} | Screen Share: {screen_status}", "info")
-    log("Aspetto che mi scartavetri i coglioni...\n", "info")
+    log("In attesa dell'attivazione...\n", "info")
     update_status("IDLE", "#666")
     
     first_activation = True
@@ -855,7 +857,7 @@ def assistant_loop():
         text = listen(state="wake word", timeout=2)
         
         if not text:
-            if last_log_line and ("❌ Non ho capito un cazzo" in last_log_line or "🎤 Sentito:" in last_log_line):
+            if last_log_line and ("❌ Non comprendo cosa stai dicendo" in last_log_line or "🎤 Sentito:" in last_log_line):
                 text_area.delete("end-2l", "end-1l")
             last_log_line = text_area.get("end-2l", "end-1l")
             continue
@@ -868,11 +870,11 @@ def assistant_loop():
                 interrupt_tts = True
                 time.sleep(0.5)
             
-            log(f"🎯 Wake word detected!", "system")
-            update_status("ACTIVE", "#51cf66")
+            log(f"🎯 Hai chiamato Roberto!", "system")
+            update_status("ATTIVO", "#51cf66")
             
             if first_activation:
-                greeting = "Che cazzo vuoi?" if settings["aggressive_mode"] else "Ciao, come posso aiutarti?"
+                greeting = "Che vuoi?" if settings["aggressive_mode"] else "Ciao, come posso aiutarti?"
                 speak(greeting, force_lang="it")
                 first_activation = False
             else:
@@ -880,14 +882,14 @@ def assistant_loop():
             
             command = listen(state="command", timeout=5, show_partial=True)
             if not command:
-                update_status("IDLE", "#666")
+                update_status("INATTIVO", "#666")
                 continue
             
-            log(f"👤 YOU: {command}", "user")
+            log(f"👤 TU: {command}", "user")
             
             speak("Dammi il tempo di ragionare", force_lang="it")
             
-            update_status("THINKING", "#fa5252")
+            update_status("PENSANDO", "#fa5252")
             
             # Capture screenshot if screen sharing is active
             screenshot_b64 = None
@@ -940,10 +942,10 @@ def assistant_loop():
             
             log(f"🤖 AI: {spoken_text}\n", "ai")
             
-            update_status("SPEAKING", "#ff6b6b")
+            update_status("PARLANDO", "#ff6b6b")
             speak(spoken_text)
             
-            update_status("IDLE", "#666")
+            update_status("INATTIVO", "#666")
             time.sleep(0.3)
 
 # Start threads
