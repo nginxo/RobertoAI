@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 import time
+import psutil
 import os
 import socket
 import subprocess
@@ -17,7 +18,7 @@ import io
 import base64
 
 # ================= CONFIG =================
-API_KEY = ""
+API_KEY = "AIzaSyBa3FPskj99OZNORGzCVVN8gBv9FAYOeUc"
 WAKE_WORD = "roberto"
 MODEL_NAME = "gemini-2.5-flash"
 ACTIVATED_SOUND = "activated.mp3"
@@ -45,6 +46,17 @@ MAX_HISTORY = 20
 # Screen sharing state
 screen_sharing_active = False
 screen_overlay = None
+
+def kill_wakeoncall():
+    """Chiude tutti i processi WakeOnCallService.exe se presenti"""
+    PROCNAME = "WakeOnCallService.exe"  # cambia se il nome è diverso
+    for proc in psutil.process_iter(["name"]):  # itera su tutti i processi.[web:55][web:60]
+        try:
+            if proc.info["name"] == PROCNAME:
+                proc.terminate()  # chiusura "pulita".[web:55]
+                # opzionale: proc.kill() se vuoi forzare
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
 
 # Load settings
 def load_settings():
@@ -241,7 +253,7 @@ def socket_listener():
     try:
         server_socket.bind((SOCKET_HOST, SOCKET_PORT))
         server_socket.listen(1)
-        log(f"🔌 Socket server avviato su {SOCKET_HOST}:{SOCKET_PORT}", "system")
+        # log(f"🔌 Socket server avviato su {SOCKET_HOST}:{SOCKET_PORT}", "system")
         
         while True:
             try:
@@ -312,6 +324,12 @@ style.theme_use('default')
 style.configure('TNotebook', background='#0a0e27', borderwidth=0)
 style.configure('TNotebook.Tab', background='#131829', foreground='#e0e0e0', padding=[20, 10])
 style.map('TNotebook.Tab', background=[('selected', '#0a0e27')], foreground=[('selected', '#00ffff')])
+
+def on_close():
+    kill_wakeoncall()
+    root.destroy()
+
+root.protocol("WM_DELETE_WINDOW", on_close)
 
 # ================= MAIN TAB =================
 main_tab = tk.Frame(notebook, bg="#0a0e27")
@@ -834,12 +852,12 @@ def assistant_loop():
     global interrupt_tts, wake_detected, current_command
     
     log("⚡ Roberto AI inizializzato", "system")
-    log("⚠️ IMPORTANTE: Avvia WakeOnCallService.py prima!", "system")
+    # log("⚠️ IMPORTANTE: Avvia WakeOnCallService.py prima!", "system")
     mode = "Aggressive" if settings["aggressive_mode"] else "Friendly"
     pc_status = "enabled" if settings["pc_control"] else "disabled"
     screen_status = "enabled" if settings["screen_sharing"] else "disabled"
     log(f"Mode: {mode} | PC Control: {pc_status} | Screen Share: {screen_status}", "info")
-    log("⏳ In attesa di WakeOnCallService...\n", "info")
+    # log("⏳ In attesa di WakeOnCallService...\n", "info")
     update_status("INATTIVO", "#666")
     
     first_activation = True

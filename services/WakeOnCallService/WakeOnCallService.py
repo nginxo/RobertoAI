@@ -4,14 +4,21 @@ import socket
 import threading
 import time
 import sys
+import os
+import sys
+
+base_path = os.path.dirname(sys.executable)
+MODEL_PATH = os.path.join(base_path, "model")
+
 from vosk import Model, KaldiRecognizer
+
+model = Model(MODEL_PATH)
 
 # ================= CONFIG =================
 WAKE_WORD = "roberto"
 SOCKET_HOST = "127.0.0.1"
 SOCKET_PORT = 65432
 MIC_DEVICE_INDEX = 0
-MODEL_PATH = "./"  # vosk-model-small-it-0.22
 SAMPLE_RATE = 16000
 
 # ================= PROTOCOL =================
@@ -28,6 +35,13 @@ SAMPLE_RATE = 16000
 # - INTERRUPT: interrompi tutto
 
 # ================= WAKE WORD DETECTOR =================
+
+def set_terminal_title(title):
+    sys.stdout.write(f"\33]0;{title}\a")
+    sys.stdout.flush()
+
+set_terminal_title("Roberto AI - WakeOnCallService")
+
 class VoiceService:
     def __init__(self):
         self.running = False

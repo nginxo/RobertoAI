@@ -1,0 +1,17 @@
+ROBERTOAI.EXE
+
+pyinstaller --onefile --clean main.pyw
+
+
+
+WAKEONCALLSERVICE.EXE
+
+pyinstaller --noconfirm --onedir --clean WakeOnCallService.py ^
+ --add-data "vosk/model;vosk/model" ^
+ --add-binary "vosk/*.dll;vosk"
+
+
+
+LAUNCHER
+
+pyinstaller --onefile --noconsole --icon=logo.ico --clean roberto_launcher.py
