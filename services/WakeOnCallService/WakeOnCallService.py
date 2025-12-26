@@ -323,7 +323,7 @@ class VoiceService:
 # ================= MAIN =================
 def main():
     print("=" * 60)
-    print("🎤 Roberto Voice Service (Vosk) - Full Version")
+    print("🎤 Servizio riconoscimento vocale per RobertoAI")
     print("=" * 60)
     
     service = VoiceService()
