@@ -17,7 +17,7 @@ import io
 import base64
 
 # ================= CONFIG =================
-API_KEY = "AIzaSyBa3FPskj99OZNORGzCVVN8gBv9FAYOeUc"
+API_KEY = ""
 WAKE_WORD = "roberto"
 MODEL_NAME = "gemini-2.5-flash"
 ACTIVATED_SOUND = "activated.mp3"
