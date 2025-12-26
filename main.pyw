@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-import speech_recognition as sr
 import time
 import os
+import socket
 import subprocess
 import platform
 from google import genai
@@ -17,13 +17,19 @@ import io
 import base64
 
 # ================= CONFIG =================
-API_KEY = "AIzaSyBI4PVBcJTUNzc1OjjGsY-UXdIzZpqcEWY"
+API_KEY = "AIzaSyBa3FPskj99OZNORGzCVVN8gBv9FAYOeUc"
 WAKE_WORD = "roberto"
-LANGUAGE = "it-IT"
-MIC_INDEX = 0
 MODEL_NAME = "gemini-2.5-flash"
 ACTIVATED_SOUND = "activated.mp3"
 SETTINGS_FILE = "roberto_settings.json"
+SOCKET_HOST = "127.0.0.1"
+SOCKET_PORT = 65432
+
+# Global flags
+wake_detected = False
+current_command = None
+listening_active = False
+voice_service_client = None
 
 # Default settings
 settings = {
@@ -47,7 +53,6 @@ def load_settings():
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, 'r') as f:
                 loaded = json.load(f)
-                # Merge with defaults to handle new settings
                 settings.update(loaded)
     except:
         pass
@@ -219,20 +224,77 @@ def get_system_prompt():
 # =========================================
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or API_KEY)
-recognizer = sr.Recognizer()
-recognizer.energy_threshold = 200
-recognizer.dynamic_energy_threshold = True
-recognizer.dynamic_energy_adjustment_damping = 0.1
-recognizer.dynamic_energy_ratio = 1.2
-recognizer.pause_threshold = 1.2
-recognizer.phrase_threshold = 0.1
-recognizer.non_speaking_duration = 0.8
 mixer.init()
 
 # Global flags
 tts_active = False
 interrupt_tts = False
-mic_lock = threading.Lock()
+
+# ================= SOCKET COMMUNICATION =================
+def socket_listener():
+    """Ascolta messaggi dal WakeOnCallService"""
+    global wake_detected, current_command, listening_active, voice_service_client
+    
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+    try:
+        server_socket.bind((SOCKET_HOST, SOCKET_PORT))
+        server_socket.listen(1)
+        log(f"🔌 Socket server avviato su {SOCKET_HOST}:{SOCKET_PORT}", "system")
+        
+        while True:
+            try:
+                client_socket, address = server_socket.accept()
+                voice_service_client = client_socket
+                log(f"🔗 Tentativo di connessione WakeOnCallService", "system")
+                
+                while True:
+                    data = client_socket.recv(1024)
+                    if not data:
+                        log("⚠️ Connessione persa con WakeOnCallService", "info")
+                        voice_service_client = None
+                        break
+                    
+                    message = data.decode('utf-8').strip()
+                    
+                    if message == "WAKE_DETECTED":
+                        wake_detected = True
+                        
+                    elif message.startswith("COMMAND:"):
+                        command_text = message[8:].strip()
+                        log(f"🎤 Comando vocale: '{command_text}'", "info")
+                        current_command = command_text
+                        listening_active = False
+                        
+                    elif message == "LISTENING_START":
+                        log("👂 Ascolto comando iniziato...", "info")
+                        listening_active = True
+                        
+                    elif message == "LISTENING_TIMEOUT":
+                        log("⏱️ Timeout ascolto comando", "info")
+                        current_command = ""
+                        listening_active = False
+                        
+            except Exception as e:
+                log(f"⚠️ Errore connessione socket: {e}", "info")
+                voice_service_client = None
+                time.sleep(1)
+                
+    except Exception as e:
+        log(f"❌ Errore socket server: {e}", "system")
+
+def send_to_voice_service(command):
+    """Invia comando al WakeOnCallService"""
+    global voice_service_client
+    try:
+        if voice_service_client:
+            voice_service_client.sendall(command.encode('utf-8'))
+            return True
+    except Exception as e:
+        log(f"❌ Errore invio comando a voice service: {e}", "info")
+        return False
+    return False
 
 # ================= GUI =================
 root = tk.Tk()
@@ -515,7 +577,6 @@ def capture_screen():
     """Capture current screen and return as base64"""
     try:
         screenshot = pyautogui.screenshot()
-        # Resize to reduce token usage
         screenshot = screenshot.resize((1280, 720), Image.Resampling.LANCZOS)
         
         buffer = io.BytesIO()
@@ -537,7 +598,6 @@ def create_screen_overlay():
     screen_overlay.configure(bg="#fa5252")
     screen_overlay.overrideredirect(True)
     
-    # Position at top-left
     screen_overlay.geometry("350x60+10+10")
     
     frame = tk.Frame(screen_overlay, bg="#fa5252", padx=10, pady=10)
@@ -636,7 +696,7 @@ def detect_language(text):
         "stare", "sto", "stai", "sta",
         "che", "e", "o", "ma", "anche", "solo", "già", "ancora",
         "non", "più", "meno", "molto", "poco", "tutto",
-        "come", "cosa", "chi", "quando", "dove", "perché", "quanto"
+        "come", "cosa", "chi", "quando", "dove", "perchè", "quanto"
     ]
     words = text.lower().split()
     italian_count = sum(1 for word in words if word in italian_words)
@@ -659,11 +719,12 @@ def speak(text, force_lang=None):
         
         while mixer.music.get_busy():
             if interrupt_tts:
-                mixer.music.stop()
                 interrupt_tts = False
                 tts_active = False
+                send_to_voice_service("INTERRUPT")
                 os.unlink(temp_file)
                 log("⏹️ TTS interrupted", "info")
+                mixer.music.stop()
                 return
             time.sleep(0.1)
         
@@ -711,72 +772,26 @@ def execute_command(command):
         log(f"❌ Esecuzione del comando fallita: {e}", "info")
         return None
 
-def listen(state="", timeout=5, show_partial=False):
-    update_status(f"ASCOLTANDO - {state}", "#ffd43b")
-    with mic_lock:
-        with sr.Microphone(device_index=MIC_INDEX) as source:
-            recognizer.adjust_for_ambient_noise(source, duration=0.3)
-            
-            try:
-                if show_partial:
-                    log("🎤 Ascoltando (in tempo reale)...", "info")
-                
-                audio = recognizer.listen(
-                    source, 
-                    timeout=timeout, 
-                    phrase_time_limit=15
-                )
-            except sr.WaitTimeoutError:
-                return ""
-        
-        try:
-            text = recognizer.recognize_google(
-                audio, 
-                language=LANGUAGE,
-                show_all=False
-            )
-            
-            if show_partial:
-                text_area.delete("end-2l", "end-1l")
-            
-            log(f"🎤 Sentito: \"{text}\"", "info")
-            return text.lower()
-        except sr.UnknownValueError:
-            if show_partial:
-                text_area.delete("end-2l", "end-1l")
-            log(f"❌ Non comprendo cosa stai dicendo", "info")
-            return ""
-        except sr.RequestError as e:
-            if show_partial:
-                text_area.delete("end-2l", "end-1l")
-            log(f"❌ Errore di riconoscimento: {e}", "info")
-            return ""
-
 def ask_gemini(prompt, dir_output=None, screenshot_b64=None):
     try:
         system_prompt = get_system_prompt()
         
-        # Build conversation context
         context = ""
         if conversation_history:
             context = "CRONOLOGIA CONVERSAZIONE (per contesto):\n"
             for exchange in conversation_history[-5:]:
                 context += f"User: {exchange['user']}\nAssistant: {exchange['assistant']}\n\n"
         
-        # Add DIR output if available
         if dir_output:
             context += f"\nRISULTATI DIR:\n{dir_output}\n\n"
         
-        # Add screen sharing status
         if screen_sharing_active:
             context += "\n[SCREEN SHARING ATTIVA - Puoi vedere lo schermo dell'utente]\n"
         
         full_prompt = f"{system_prompt}\n\n{context}User: {prompt}"
         
-        # Build content array
         contents = [{"text": full_prompt}]
         
-        # Add screenshot if screen sharing is active
         if screenshot_b64:
             contents.append({
                 "inline_data": {
@@ -803,7 +818,6 @@ def process_response(response):
     for line in lines:
         stripped = line.strip()
         if stripped.startswith('!!!'):
-            # Extract command after !!!
             command = stripped[3:].strip()
             if command == "OFFER_SCREEN_SHARE":
                 offer_screen_share = True
@@ -816,140 +830,117 @@ def process_response(response):
     
     return spoken_text, commands, offer_screen_share
 
-def background_wake_word_listener():
-    global interrupt_tts
-    
-    while True:
-        if not tts_active:
-            time.sleep(0.1)
-            continue
-            
-        try:
-            with mic_lock:
-                with sr.Microphone(device_index=MIC_INDEX) as source:
-                    audio = recognizer.listen(source, timeout=1, phrase_time_limit=3)
-                
-                text = recognizer.recognize_google(audio, language=LANGUAGE).lower()
-                
-                if WAKE_WORD in text and tts_active:
-                    log("🛑 Interrompo la risposta", "system")
-                    interrupt_tts = True
-                    
-        except:
-            pass
-        
-        time.sleep(0.1)
-
 def assistant_loop():
-    global interrupt_tts
+    global interrupt_tts, wake_detected, current_command
+    
     log("⚡ Roberto AI inizializzato", "system")
+    log("⚠️ IMPORTANTE: Avvia WakeOnCallService.py prima!", "system")
     mode = "Aggressive" if settings["aggressive_mode"] else "Friendly"
     pc_status = "enabled" if settings["pc_control"] else "disabled"
     screen_status = "enabled" if settings["screen_sharing"] else "disabled"
     log(f"Mode: {mode} | PC Control: {pc_status} | Screen Share: {screen_status}", "info")
-    log("In attesa dell'attivazione...\n", "info")
+    log("⏳ In attesa di WakeOnCallService...\n", "info")
     update_status("INATTIVO", "#666")
     
     first_activation = True
-    last_log_line = None
     
     while True:
-        text = listen(state="wake word", timeout=2)
-        
-        if not text:
-            if last_log_line and ("❌ Non comprendo cosa stai dicendo" in last_log_line or "🎤 Sentito:" in last_log_line):
-                text_area.delete("end-2l", "end-1l")
-            last_log_line = text_area.get("end-2l", "end-1l")
+        if not wake_detected:
+            time.sleep(0.1)
             continue
         
-        last_log_line = None
+        wake_detected = False
         
-        if WAKE_WORD in text:
-            if tts_active:
-                log("🛑 Interrompo la risposta", "system")
-                interrupt_tts = True
-                time.sleep(0.5)
-            
-            log(f"🎯 Hai chiamato Roberto!", "system")
-            update_status("ATTIVO", "#51cf66")
-            
-            if first_activation:
-                greeting = "Che vuoi?" if settings["aggressive_mode"] else "Ciao, come posso aiutarti?"
-                speak(greeting, force_lang="it")
-                first_activation = False
-            else:
-                play_activation_sound()
-            
-            command = listen(state="command", timeout=5, show_partial=True)
-            if not command:
-                update_status("INATTIVO", "#666")
-                continue
-            
-            log(f"👤 TU: {command}", "user")
-            
-            speak("Dammi il tempo di ragionare", force_lang="it")
-            
-            update_status("PENSANDO", "#fa5252")
-            
-            # Capture screenshot if screen sharing is active
-            screenshot_b64 = None
-            if screen_sharing_active:
-                screenshot_b64 = capture_screen()
-                if screenshot_b64:
-                    log("📸 Screenshot catturato per analisi", "screen")
-            
-            # First AI response
-            ai_response = ask_gemini(command, screenshot_b64=screenshot_b64)
-            
-            # Process response
-            spoken_text, commands, offer_screen_share = process_response(ai_response)
-            
-            # Handle screen share offer
-            if offer_screen_share and settings["screen_sharing"] and not screen_sharing_active:
-                if request_screen_sharing():
-                    # Get new response with screen visible
-                    screenshot_b64 = capture_screen()
-                    ai_response = ask_gemini(command, screenshot_b64=screenshot_b64)
-                    spoken_text, commands, _ = process_response(ai_response)
-                else:
-                    spoken_text = "Ok, proviamo senza vedere lo schermo. " + spoken_text
-            
-            # Execute commands and check for DIR output
-            dir_output = None
-            for cmd in commands:
-                result = execute_command(cmd)
-                if result is not None:
-                    dir_output = result
-            
-            # If we got DIR output, ask AI again
-            if dir_output:
-                log("🔄 Rielaborando con i risultati della ricerca...", "info")
-                screenshot_b64 = capture_screen() if screen_sharing_active else None
-                ai_response = ask_gemini(command, dir_output, screenshot_b64)
-                spoken_text, commands, _ = process_response(ai_response)
-                
-                for cmd in commands:
-                    execute_command(cmd)
-            
-            # Add to conversation history
-            conversation_history.append({
-                'user': command,
-                'assistant': spoken_text
-            })
-            
-            if len(conversation_history) > MAX_HISTORY:
-                conversation_history.pop(0)
-            
-            log(f"🤖 AI: {spoken_text}\n", "ai")
-            
-            update_status("PARLANDO", "#ff6b6b")
-            speak(spoken_text)
-            
+        # Richiedi ascolto comando al voice service
+        update_status("ASCOLTANDO", "#ffd43b")
+        send_to_voice_service("START_LISTENING")
+
+        if tts_active:
+            log("🛑 Interrompo la risposta", "system")
+            interrupt_tts = True
+            time.sleep(0.5)
+        
+        log(f"🎯 Roberto attivato!", "system")
+        update_status("ATTIVO", "#51cf66")
+        
+        if first_activation:
+            greeting = "Che vuoi?" if settings["aggressive_mode"] else "Ciao, come posso aiutarti?"
+            speak(greeting, force_lang="it")
+            first_activation = False
+        else:
+            play_activation_sound()
+        
+        current_command = None
+        timeout_counter = 0
+        
+        while current_command is None and timeout_counter < 200:
+            time.sleep(0.1)
+            timeout_counter += 1
+        
+        if not current_command or current_command == "":
             update_status("INATTIVO", "#666")
-            time.sleep(0.3)
+            continue
+        
+        command = current_command
+        current_command = None
+        
+        log(f"💤 TU: {command}", "user")
+        
+        speak("Dammi il tempo di ragionare", force_lang="it")
+        
+        update_status("PENSANDO", "#fa5252")
+        
+        screenshot_b64 = None
+        if screen_sharing_active:
+            screenshot_b64 = capture_screen()
+            if screenshot_b64:
+                log("📸 Screenshot catturato per analisi", "screen")
+        
+        ai_response = ask_gemini(command, screenshot_b64=screenshot_b64)
+        
+        spoken_text, commands, offer_screen_share = process_response(ai_response)
+        
+        if offer_screen_share and settings["screen_sharing"] and not screen_sharing_active:
+            if request_screen_sharing():
+                screenshot_b64 = capture_screen()
+                ai_response = ask_gemini(command, screenshot_b64=screenshot_b64)
+                spoken_text, commands, _ = process_response(ai_response)
+            else:
+                spoken_text = "Ok, proviamo senza vedere lo schermo. " + spoken_text
+        
+        dir_output = None
+        for cmd in commands:
+            result = execute_command(cmd)
+            if result is not None:
+                dir_output = result
+        
+        if dir_output:
+            log("🔄 Rielaborando con i risultati della ricerca...", "info")
+            screenshot_b64 = capture_screen() if screen_sharing_active else None
+            ai_response = ask_gemini(command, dir_output, screenshot_b64)
+            spoken_text, commands, _ = process_response(ai_response)
+            
+            for cmd in commands:
+                execute_command(cmd)
+        
+        conversation_history.append({
+            'user': command,
+            'assistant': spoken_text
+        })
+        
+        if len(conversation_history) > MAX_HISTORY:
+            conversation_history.pop(0)
+        
+        log(f"🤖 AI: {spoken_text}\n", "ai")
+        
+        update_status("PARLANDO", "#ff6b6b")
+        speak(spoken_text)
+        
+        update_status("INATTIVO", "#666")
+        time.sleep(0.3)
 
 # Start threads
-threading.Thread(target=background_wake_word_listener, daemon=True).start()
+threading.Thread(target=socket_listener, daemon=True).start()
 threading.Thread(target=assistant_loop, daemon=True).start()
 
 root.mainloop()
